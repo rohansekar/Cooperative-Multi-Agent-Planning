@@ -2,7 +2,7 @@ import pickle
 import matplotlib.pyplot as plt
 
 # Load the pickle file
-with open('obstacles.pkl', 'rb') as file:
+with open('obstacles2.pkl', 'rb') as file:
     obstacles = pickle.load(file)
 
 print(obstacles)

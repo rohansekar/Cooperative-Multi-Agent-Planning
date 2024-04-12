@@ -25,6 +25,16 @@ class ObstacleMap(object):
                 x = msg.info.origin.position.x+(i % msg.info.width)*0.15
                 y = msg.info.origin.position.y+(i // msg.info.width)*0.15
                 self.obstacles.append((x, y))
+                addy=0.25
+                addx=0.25
+                for k in range(2):
+                    addy=0.25
+                    for p in range(2):
+                        self.obstacles.append((x+addx, y+addy))
+                        addy=addy+0.25
+                    addx=addx+0.25
+
+
 
     def run(self):
         rospy.spin()
