@@ -5,19 +5,25 @@ import matplotlib.pyplot as plt
 with open('obstacles.pkl', 'rb') as file:
     obstacles = pickle.load(file)
 
-# Prepare to plot the obstacles
 print(obstacles)
 fig, ax = plt.subplots()
-x_coords, y_coords = zip(*obstacles)  # This separates the list of tuples into two lists of x and y coordinates
+x_coords, y_coords = zip(*obstacles)  
+x_coords=list(x_coords)
+y_coords=list(y_coords)
+# for i in range (len(x_coords)):
+#     x_coords[i]*=0.15
+#     y_coords[i]*=0.15
+print(min(x_coords),max(x_coords))
+print(min(y_coords),max(y_coords))
 
-# Plot each obstacle as a point
+
+
+
+
 ax.scatter(x_coords, y_coords, c='red', marker='o', label='Obstacles')
 
-# Set plot labels and legend
 ax.set_xlabel('X coordinates')
 ax.set_ylabel('Y coordinates')
 ax.set_title('Map of Obstacles')
 ax.legend()
-
-# Show the plot
 plt.show()

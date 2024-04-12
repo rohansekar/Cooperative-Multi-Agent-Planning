@@ -22,8 +22,8 @@ class ObstacleMap(object):
         self.obstacles=[]
         for i, value in enumerate(msg.data):
             if value == 100:
-                x = i % msg.info.width
-                y = i // msg.info.width
+                x = msg.info.origin.position.x+(i % msg.info.width)*0.15
+                y = msg.info.origin.position.y+(i // msg.info.width)*0.15
                 self.obstacles.append((x, y))
 
     def run(self):
@@ -31,11 +31,12 @@ class ObstacleMap(object):
 
     def save_obstacles(self):
         print('here')
-        with open("obstacles.pkl", "wb") as file:
+        with open("obstacles2.pkl", "wb") as file:
             pickle.dump(self.obstacles, file)
         print("Obstacle coordinates have been saved to 'obstacles.pkl'")
 
 if __name__ == '__main__':
     node = ObstacleMap()
     node.run()
+    
     node.save_obstacles()
