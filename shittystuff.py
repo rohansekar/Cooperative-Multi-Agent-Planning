@@ -37,7 +37,7 @@ class MAPF:
     def __init__(self):
         self.num_of_agents=1
         self.starts=[(2,0)]
-        self.goals=[(10,0)]
+        self.goals=[(17,17)]
         self.heuristics = []
         self.used = []
         # Subscribers and Publishers
@@ -116,7 +116,8 @@ class MAPF:
         self.conmap1={}
         self.conmap2={}
         self.directions={}
-        self.directions[0]=node()
+        # for i in range(4):
+        #     self.directions[i]=0
         self.node_ids1=[]
         self.node_ids2=[]
         self.node_counter=0
@@ -134,7 +135,6 @@ class MAPF:
         self.node_ids1 = []
         self.node_ids2 = []
         self.node_counter = 0
-        self.directions=[]
         self.direction_counter=[]
         self.current_ids = []
         self.next_ids = []
@@ -147,31 +147,37 @@ class MAPF:
         self.has_odom1 = False
         self.has_odom2 = False
         self.update_hz=20
-        
+
     def Odom1CB(self,msg):
         self.odom1=msg
 
-    def move(self,loc, dir,parent):
-        print(len(self.used))
-        print('directions',self.directions)
-        self.directions[dir]=node()
-        self.directions[dir].x=self.odom1.pose.pose.position.x
-        self.directions[dir].y=self.odom1.pose.pose.position.y
-        self.directions[dir].yaw=euler_from_quaternion([self.odom1.pose.pose.orientation.x,self.odom1.pose.pose.orientation.y,self.odom1.pose.pose.orientation.z,self.odom1.pose.pose.orientation.w])[2]
-        self.directions[dir].id=0
-        self.directions[dir].parent=parent
+    def move(self,loc,parent,id):
+        # print(len(self.used))
+        self.directions[0]=node()
+        self.directions[0].x=loc[0]
+        self.directions[0].y=loc[1]
+        self.directions[0].yaw=parent["dir"]
+        self.directions[0].id=0
+        self.directions[0].parent=parent
         self.current_ids=[]
-        self.next_ids=[dir]
+        self.next_ids=[0]
         self.node_counter=0
-        self.direction_counter.append(dir)
+        self.direction_counter.append(0)
         self.next_ids=[]
-        for j in range(len(self.used)):
-            self.direction_counter.append(
-        self.draw_children(dir, self.direction_counter, self.directions))
-        return loc[0] + self.directions[dir].x, loc[1] + self.directions[dir].y
+        # print('directions',self.directions)
+        rad=self.paths[id].r
+        theta=self.paths[id].theta
+        xnew=loc[0]+rad*math.cos(theta+parent["dir"])
+        ynew=loc[1]+rad*math.sin(theta+parent["dir"])
+        theta_new=self.paths[id].orientation+parent["dir"]
+        # print('xnew and ynew',xnew,ynew)
+        if (self.grid[(int(xnew*10),int(ynew*10))].occupancy==100):
+            return
+
+        return xnew, ynew,theta_new
     
     def compute_heuristics(self,pos, goal):
-        return pow(abs(goal[0] - pos[0]),2) + pow(abs(goal[1] - pos[1]),2)
+        return math.sqrt(pow(abs(goal[0] - pos[0]),2) + pow(abs(goal[1] - pos[1]),2))
     
     def valid_path(self,path_id,node_id,nodes):
         # print('path id',path_id)
@@ -208,7 +214,9 @@ class MAPF:
             self.next_ids.append(node_counter)
         return node_counter
     
+    
     def run(self):
+
         r = rospy.Rate(self.update_hz)
         while not rospy.is_shutdown():
             print('Inside Run')
@@ -216,12 +224,34 @@ class MAPF:
                 self.starts[0],
                 self.goals[0]
             )
-            path.header.frame_id = "cmu_rc1_odom"
-            path.header.stamp = rospy.Time.now()
-            self.astar_path.publish(path)
+            print('PATH', path)
+
+            if not path:
+                print("No path found, continuing...")
+                r.sleep()
+                continue 
+
+            pub_path = Path()
+            pub_path.header.frame_id = "cmu_rc1_odom"
+            pub_path.header.stamp = rospy.Time.now()
+
+            for position in path:
+                pose = PoseStamped()
+                pose.header.frame_id = "cmu_rc1_odom"
+                pose.header.stamp = rospy.Time.now()
+                pose.pose.position.x = position[0]
+                pose.pose.position.y = position[1]
+                pose.pose.orientation.w = 1.0
+                pub_path.poses.append(pose)
+
+            self.astar_path.publish(pub_path)
+            print("Path published successfully")
+
             if self.flag and self.has_odom1 and self.has_odom2:
                 self.publist()
-            r.sleep()
+            break
+
+
     def publist(self):
         self.nodes1[0]=node()
         self.nodes1[0].x=self.odom1.pose.pose.position.x
@@ -331,6 +361,7 @@ class MAPF:
                     max_t=constraint["timestep"]
         return table,max_t
     def in_map(self,map, loc):
+        print('loc',loc[0],len(map))
         if loc[0] >= len(map) or loc[1] >= len(map[0]) or min(loc) < 0:
             return False
         else:
@@ -347,35 +378,35 @@ class MAPF:
             "h_val": h_value,
             "parent": None,
             "timestep": 0,
+            "dir":euler_from_quaternion([self.odom1.pose.pose.orientation.x,self.odom1.pose.pose.orientation.y,self.odom1.pose.pose.orientation.z,self.odom1.pose.pose.orientation.w])[2]
         }
         heapq.heappush(open_list, (root["g_val"] + root["h_val"], root["h_val"], root["loc"], root))
         closed_list[((root["loc"], root["timestep"]))] = root
         while len(open_list) > 0:
             _, _, _, curr = heapq.heappop(open_list)
-            if curr["loc"] == goal_loc:
+            if self.compute_heuristics(curr["loc"],goal_loc)<3.0:
                 return self.get_path(curr)
-            for dir in range(len(self.used)):
-                child_loc = self.move(curr["loc"], dir,curr)
-                if not self.in_map(self.map, child_loc):
-                    continue
-                if self.map[child_loc[0]][child_loc[1]]:
-                    continue
+            for i in range(len(self.used)):
+                print('i******',i)
+                child_loc = self.move(curr["loc"],curr,i)
                 child_timestep = curr["timestep"] + 1
+                print('child**********',child_loc[0],child_loc[1])
                 child = {
-                    "loc": child_loc,
+                    "loc": [child_loc[0],child_loc[1]],
                     "g_val": curr["g_val"] + 1,
                     "h_val": self.compute_heuristics(child_loc,goal_loc),
                     "parent": curr,
                     "timestep": child_timestep,
+                    "dir":child_loc[2]
                 }
-                print("loc", child_loc)
-                if (child["loc"], child["timestep"]) in closed_list:
-                    existing_node = closed_list[(child["loc"], child["timestep"])]
+                print('hval********',self.compute_heuristics(child_loc,goal_loc))
+                if (tuple(child["loc"]), child["timestep"]) in closed_list:
+                    existing_node = closed_list[tuple(child["loc"]), child["timestep"]]
                     if self.compare_nodes(child, existing_node):
-                        closed_list[(child["loc"], child["timestep"])] = child
+                        closed_list[tuple(child["loc"]), child["timestep"]] = child
                         heapq.heappush(open_list, (child["g_val"] + child["h_val"], child["h_val"], child["loc"], child))
                 else:
-                    closed_list[(child["loc"], child["timestep"])] = child
+                    closed_list[tuple(child["loc"]), child["timestep"]] = child
                     heapq.heappush(open_list, (child["g_val"] + child["h_val"], child["h_val"], child["loc"], child))
         return None 
     
