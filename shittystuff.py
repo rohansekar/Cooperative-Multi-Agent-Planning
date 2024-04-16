@@ -37,8 +37,8 @@ class loc:
 class MAPF:
     def __init__(self):
         self.num_of_agents=2
-        self.starts=[(0,0),(-10,0)]
-        self.goals=[(-9,-1),(-2,5)]
+        self.starts=[(2.0703409520960685,-1.2613845147593956),(-15.985396622592285,-0.6281878924291778)]
+        self.goals=[(-9,-1),(-0,0)]
         self.heuristics = []
         self.used = []
         # Subscribers and Publishers
@@ -85,35 +85,35 @@ class MAPF:
             126,
             127,
         ]
-        all_paths=np.load('/home/developer/mmpug_ws/src/mmpug_autonomy/mmpug_nav_layer/local_planner/scripts/paths32.npy')
+        all_paths=np.load('/home/developer/mmpug_ws/src/mmpug_autonomy/mmpug_nav_layer/local_planner/scripts/mapf_rc.npy')
         all_rel_paths= []
         for i in range(all_paths.shape[0]):
             if (all_paths[i][-1] == 2): 
                 all_rel_paths.append(all_paths[i])
         all_rel_paths_ids=[]
         for i in range(len(all_rel_paths)):
-            if (all_rel_paths[i][3] not in all_rel_paths_ids):
-                if (all_rel_paths[i][3] in useless):
-                    continue
-                all_rel_paths_ids.append(all_rel_paths[i][3])
-        print("number of relative self.paths: ", len(all_rel_paths_ids))
+            if (all_rel_paths[i][4] not in all_rel_paths_ids):
+                # if (all_rel_paths[i][4] in useless):
+                #     continue
+                all_rel_paths_ids.append(all_rel_paths[i][4])
+        # print("number of relative self.paths: ", len(all_rel_paths_ids))
         self.path_dict={}
         for i in range(len(all_rel_paths_ids)):
             self.path_dict[all_rel_paths_ids[i]] = []
         for i in range(len(all_rel_paths)):
-            if (all_rel_paths[i][3] in self.path_dict.keys()):
-                self.path_dict[all_rel_paths[i][3]].append(all_rel_paths[i])
+            if (all_rel_paths[i][4] in self.path_dict.keys()):
+                self.path_dict[all_rel_paths[i][4]].append(all_rel_paths[i])
         self.paths={}
         for i in range(len(all_rel_paths_ids)):
             if self.path_dict[all_rel_paths_ids[i]] !=[]:
                 self.paths[i] = path(self.path_dict[all_rel_paths_ids[i]])
         self.used=[]
         for i in range(len(all_rel_paths)):
-            if (all_rel_paths[i][3] in self.path_dict.keys()):
-                if (all_rel_paths[i][3] in useless):
-                    continue
-                self.used.append(all_rel_paths[i][3])
-                self.path_dict[all_rel_paths[i][3]].append(all_rel_paths[i])
+            if (all_rel_paths[i][4] in self.path_dict.keys()):
+                # if (all_rel_paths[i][4] in useless):
+                #     continue
+                self.used.append(all_rel_paths[i][4])
+                self.path_dict[all_rel_paths[i][4]].append(all_rel_paths[i])
         self.used=np.unique(self.used)
         self.nodes1={}
         self.nodes2={}
@@ -271,7 +271,9 @@ class MAPF:
 
                     if j>=len(all_paths[i-1]):
                         continue
-                    if (self.disttance_pt(all_paths[i][j][0],all_paths[i-1][j][0],all_paths[i][j][1],all_paths[i-1][j][1])<1):
+                    print(self.disttance_pt(all_paths[i][j][0],all_paths[i-1][j][0],all_paths[i][j][1],all_paths[i-1][j][1]),i)
+                    if (self.disttance_pt(all_paths[i][j][0],all_paths[i-1][j][0],all_paths[i][j][1],all_paths[i-1][j][1])<3):
+                        print("rohan lawda hai")
                         temp.append(temp[-1])
                 all_paths[i]=temp
 
@@ -303,6 +305,9 @@ class MAPF:
                 pose.pose.orientation.w = 1.0
                 pub_path.poses.append(pose)
 
+            print("path1",all_paths[0])
+            print("path2",all_paths[1])
+
             self.astar_path2.publish(pub_path)
             print("Path published successfully")
             break
@@ -320,7 +325,7 @@ class MAPF:
         self.next_ids=[0]
         self.node_counter=0
         self.node_ids1.append(0)
-        for i in range(10):
+        for i in range(4):
             self.current_ids=self.next_ids
             self.next_ids=[]
             for j in range(len(self.current_ids)):
@@ -341,7 +346,7 @@ class MAPF:
         self.next_ids=[0]
         self.node_counter=0
         self.node_ids2.append(0)
-        for i in range(5):
+        for i in range(4):
             self.current_ids=self.next_ids
             self.next_ids=[]
             for j in range(len(self.current_ids)):
@@ -368,7 +373,7 @@ class MAPF:
         shit.header.stamp=rospy.Time.now()
         for j in self.nodes1.keys():
             some=Pose()
-            print(self.nodes1[j].x)
+            # print(self.nodes1[j].x)
             some.position.x=self.nodes1[j].x
             some.position.y=self.nodes1[j].y
             shit.poses.append(some)
@@ -405,7 +410,7 @@ class MAPF:
                     max_t=constraint["timestep"]
         return table,max_t
     def in_map(self,map, loc):
-        print('loc',loc[0],len(map))
+        # print('loc',loc[0],len(map))
         if loc[0] >= len(map) or loc[1] >= len(map[0]) or min(loc) < 0:
             return False
         else:
@@ -430,9 +435,9 @@ class MAPF:
         while len(open_list) > 0:
             _, _, _, curr = heapq.heappop(open_list)
             if self.compute_heuristics(curr["loc"],goal_loc)<3.0:
-                print("************************")
+                # print("************************")
                 return self.get_path(curr)
-            print(curr["loc"]," num child ",len(nodes[curr["node_id"]].children))
+            # print(curr["loc"]," num child ",len(nodes[curr["node_id"]].children))
             for i in range(len(nodes[curr["node_id"]].children)):
                 # print('i******',i)
                 child_loc = [nodes[nodes[curr["node_id"]].children[i]].x,nodes[nodes[curr["node_id"]].children[i]].y]
