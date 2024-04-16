@@ -6,6 +6,7 @@ from std_msgs.msg import Bool, String, Float32, UInt8
 from tf.transformations import euler_from_quaternion
 import math
 import numpy as np
+import time
 from itertools import combinations
 import time as timer
 import pickle
@@ -35,16 +36,22 @@ class loc:
         self.path_ids=[]
 class MAPF:
     def __init__(self):
-        self.num_of_agents=1
-        self.starts=[(2,0)]
-        self.goals=[(17,17)]
+        self.num_of_agents=2
+        self.starts=[(0,0),(-10,0)]
+        self.goals=[(-9,-1),(-2,5)]
         self.heuristics = []
         self.used = []
         # Subscribers and Publishers
         self.astar_path=rospy.Publisher('/path_topic', Path, queue_size=10)
+        self.astar_path2=rospy.Publisher('/path_topic2', Path, queue_size=10)
         self.convoy_switch_sub = rospy.Subscriber(
             "/cmu_rc1/odom_to_base_link", Odometry, self.Odom1CB
         )
+        self.convoy_switch_sub = rospy.Subscriber(
+            "/cmu_rc2/odom_to_base_link", Odometry, self.Odom2CB
+        )
+        self.reache_wpts_pub = rospy.Publisher(
+            "/shit", PoseArray, queue_size=5)
         # self.convoy_sdwitch_sub = rospy.Subscriber(
         #     "/cmu_rc2/odom_to_base_link", Odometry, self.convoySwitchCallback2
         # )
@@ -139,17 +146,21 @@ class MAPF:
         self.current_ids = []
         self.next_ids = []
         # self.contch_sub = rospy.Subscriber("/pubtreaj", Bool, self.soemt)
-        self.reache_wpts_pub = rospy.Publisher("/pubtopic", PoseArray, queue_size=5)
         # Variables
         self.flag = True
         self.odom1 = Odometry()
         self.odom2 = Odometry()
         self.has_odom1 = False
         self.has_odom2 = False
-        self.update_hz=20
+        self.update_hz=1
 
     def Odom1CB(self,msg):
         self.odom1=msg
+        self.has_odom1=True
+    
+    def Odom2CB(self,msg):
+        self.odom2=msg
+        self.has_odom2=True
 
     def move(self,loc,parent,id):
         # print(len(self.used))
@@ -192,7 +203,6 @@ class MAPF:
     
     def draw_children(self,node_id,node_ids,nodes):
         node_counter = node_ids[-1]
-        print('node_id',node_id)
         for i in range(len(self.used)):
             node_counter+=1
             if (not self.valid_path(i,node_id,nodes)):
@@ -218,12 +228,33 @@ class MAPF:
     def run(self):
 
         r = rospy.Rate(self.update_hz)
+        r.sleep()
         while not rospy.is_shutdown():
+            r.sleep()
             print('Inside Run')
-            path = self.a_star(
-                self.starts[0],
-                self.goals[0]
-            )
+            all_paths=[]
+            if self.flag and self.has_odom1 and self.has_odom2:
+            # if self.has_odom1 and self.flag:
+                self.publist()
+            elif self.flag:
+                continue
+            else:
+                continue
+            for i in range(self.num_of_agents):
+                if i==0:
+                    path = self.a_star(
+                        self.starts[i],
+                        self.goals[i],
+                        self.nodes1
+                    )
+                else:
+                    print("agent 2")
+                    path = self.a_star(
+                        self.starts[i],
+                        self.goals[i],
+                        self.nodes2
+                    )
+                all_paths.append(path)
             print('PATH', path)
 
             if not path:
@@ -231,11 +262,24 @@ class MAPF:
                 r.sleep()
                 continue 
 
+            for i in range(self.num_of_agents):
+                if i==0:
+                    continue
+                temp=[]
+                for j in range(len(all_paths[i])):
+                    temp.append(all_paths[i][j])
+
+                    if j>=len(all_paths[i-1]):
+                        continue
+                    if (self.disttance_pt(all_paths[i][j][0],all_paths[i-1][j][0],all_paths[i][j][1],all_paths[i-1][j][1])<1):
+                        temp.append(temp[-1])
+                all_paths[i]=temp
+
             pub_path = Path()
             pub_path.header.frame_id = "cmu_rc1_odom"
             pub_path.header.stamp = rospy.Time.now()
 
-            for position in path:
+            for position in all_paths[0]:
                 pose = PoseStamped()
                 pose.header.frame_id = "cmu_rc1_odom"
                 pose.header.stamp = rospy.Time.now()
@@ -245,14 +289,27 @@ class MAPF:
                 pub_path.poses.append(pose)
 
             self.astar_path.publish(pub_path)
-            print("Path published successfully")
 
-            if self.flag and self.has_odom1 and self.has_odom2:
-                self.publist()
+            pub_path = Path()
+            pub_path.header.frame_id = "cmu_rc2_odom"
+            pub_path.header.stamp = rospy.Time.now()
+
+            for position in all_paths[1]:
+                pose = PoseStamped()
+                pose.header.frame_id = "cmu_rc2_odom"
+                pose.header.stamp = rospy.Time.now()
+                pose.pose.position.x = position[0]
+                pose.pose.position.y = position[1]
+                pose.pose.orientation.w = 1.0
+                pub_path.poses.append(pose)
+
+            self.astar_path2.publish(pub_path)
+            print("Path published successfully")
             break
 
 
     def publist(self):
+        start = time. time()
         self.nodes1[0]=node()
         self.nodes1[0].x=self.odom1.pose.pose.position.x
         self.nodes1[0].y=self.odom1.pose.pose.position.y
@@ -263,83 +320,70 @@ class MAPF:
         self.next_ids=[0]
         self.node_counter=0
         self.node_ids1.append(0)
-        for i in range(3):
+        for i in range(10):
             self.current_ids=self.next_ids
             self.next_ids=[]
             for j in range(len(self.current_ids)):
                 self.node_ids1.append(self.draw_children(self.current_ids[j],self.node_ids1,self.nodes1))
 
-        view_nodes = PoseArray()
-        view_nodes.header.frame_id = "cmu_rc1_odom"
-        view_nodes.header.stamp = rospy.Time.now()
+
+
+        end = time. time()
+        duration = end - start
+        print("Time: {} seconds". format(round(duration, 3)))
+        self.nodes2[0]=node()
+        self.nodes2[0].x=self.odom2.pose.pose.position.x
+        self.nodes2[0].y=self.odom2.pose.pose.position.y
+        self.nodes2[0].yaw=euler_from_quaternion([self.odom2.pose.pose.orientation.x,self.odom2.pose.pose.orientation.y,self.odom2.pose.pose.orientation.z,self.odom2.pose.pose.orientation.w])[2]
+        self.nodes2[0].id=0
+        self.nodes2[0].parent=None
+        self.current_ids=[]
+        self.next_ids=[0]
+        self.node_counter=0
+        self.node_ids2.append(0)
+        for i in range(5):
+            self.current_ids=self.next_ids
+            self.next_ids=[]
+            for j in range(len(self.current_ids)):
+                self.node_ids2.append(self.draw_children(self.current_ids[j],self.node_ids2,self.nodes2))
+
+
+        for i in self.nodes1.keys():
+            self.conmap1[i]=[]
+            for j in self.nodes2.keys():
+                if (math.sqrt((self.nodes1[i].x-self.nodes2[j].x)**2+(self.nodes1[i].y-self.nodes2[j].y)**2)<1):
+                    self.conmap1[i].append(j)
+        for i in self.nodes2.keys():
+            self.conmap2[i]=[]
+            for j in self.nodes1.keys():
+                if (math.sqrt((self.nodes1[j].x-self.nodes2[i].x)**2+(self.nodes1[j].y-self.nodes2[i].y)**2)<1):
+                    self.conmap2[i].append(j)
+            
+
+
+
+
+        shit = PoseArray()
+        shit.header.frame_id="cmu_rc1_odom"
+        shit.header.stamp=rospy.Time.now()
         for j in self.nodes1.keys():
-            some = Pose
-            some.position.x = self.nodes1[i].x
-            some.position.y = self.nodes1[i].y
-            view_nodes.pose.append(some)
-        self.reache_wpts_pub.publish(view_nodes)
-        self.flag = False
+            some=Pose()
+            print(self.nodes1[j].x)
+            some.position.x=self.nodes1[j].x
+            some.position.y=self.nodes1[j].y
+            shit.poses.append(some)
+        
+        self.reache_wpts_pub.publish(shit)
+        self.flag=False
     def wrap2pi(self, yaw):
         if yaw > math.pi:
             yaw -= 2 * math.pi
         if yaw <= -math.pi:
             yaw += 2 * math.pi
         return yaw
-    # def cbs(self):
-    #     self.start_time = timer.time()
-    #     root = {"cost": 0, "constraints": [], "paths": [], "collisions": []}
-    #     for i in range(self.num_of_agents): 
-    #         path = self.a_star(
-    #             self.map,
-    #             self.starts[i],
-    #             self.goals[i],
-    #             self.heuristics[i],
-    #             i,
-    #             root["constraints"],
-    #         )
-    #         if path is None:
-    #             raise BaseException("No solutions")
-    #         root["paths"].append(path)
-    #     # root["collisions"] = detect_collisions_among_all_paths(root["paths"])
-    #     # root["cost"] = get_sum_of_cost(root["paths"])
-    #     # self.push_node(root)
-    #     # a = 0
-    #     # while len(self.open_list) > 0:
-    #     #     curr = self.pop_node()
-    #     #     curr["collisions"] = detect_collisions_among_all_paths(curr["paths"])
-    #     #     if len(curr["collisions"]) == 0:
-    #     #         self.print_results(curr)
-    #     #         return curr["paths"]
-    #     #     for j in curr["collisions"]:
-    #     #         new_constraints = standard_splitting(j)
-    #     #         for i in new_constraints:
-    #     #             child = copy.deepcopy(curr)
-    #     #             if i not in curr["constraints"]:
-    #     #                 child["constraints"].append(i)
-    #     #             agent_id = i["agent"]
-    #     #             path = a_star(
-    #     #                 self.my_map,
-    #     #                 self.starts[agent_id],
-    #     #                 self.goals[agent_id],
-    #     #                 self.heuristics[agent_id],
-    #     #                 agent_id,
-    #     #                 child["constraints"],
-    #     #             )
-    #     #             a += 1
-    #     #             if a > 500:
-    #     #                 print("TimeOut")
-    #     #                 self.print_results(curr)
-    #     #                 return curr["paths"]
-    #     #             print("path", path)
-    #     #             if path is None:
-    #     #                 return None
-    #     #             child["paths"][agent_id] = path
-    #     #             child["collisions"] = detect_collisions_among_all_paths(
-    #     #                 child["paths"]
-    #     #             )
-    #     #             child["cost"] = get_sum_of_cost(child["paths"])
-    #     #             self.push_node(child)
-    #     return None
+    def disttance_pt(self,x1,x2,y1,y2):
+        return math.sqrt((x1-x2)*(x1-x2)+(y1-y2)*(y1-y2))
+
     
     def push_node(self,open_list, node):
         heapq.heappush(
@@ -368,38 +412,41 @@ class MAPF:
             return True
     def compare_nodes(self,n1, n2):
         return n1["g_val"] + n1["h_val"] < n2["g_val"] + n2["h_val"]
-    def a_star(self, start_loc, goal_loc):
+    
+    def a_star(self, start_loc, goal_loc,nodes):
         open_list = []
         closed_list = dict()
-        h_value = self.compute_heuristics(start_loc,goal_loc)
+        h_value = self.compute_heuristics([nodes[0].x,nodes[0].y],goal_loc)
         root = {
-            "loc": start_loc,
+            "loc": tuple([nodes[0].x,nodes[0].y]),
             "g_val": 0,
             "h_val": h_value,
             "parent": None,
             "timestep": 0,
-            "dir":euler_from_quaternion([self.odom1.pose.pose.orientation.x,self.odom1.pose.pose.orientation.y,self.odom1.pose.pose.orientation.z,self.odom1.pose.pose.orientation.w])[2]
+            "node_id":0
         }
         heapq.heappush(open_list, (root["g_val"] + root["h_val"], root["h_val"], root["loc"], root))
         closed_list[((root["loc"], root["timestep"]))] = root
         while len(open_list) > 0:
             _, _, _, curr = heapq.heappop(open_list)
             if self.compute_heuristics(curr["loc"],goal_loc)<3.0:
+                print("************************")
                 return self.get_path(curr)
-            for i in range(len(self.used)):
-                print('i******',i)
-                child_loc = self.move(curr["loc"],curr,i)
+            print(curr["loc"]," num child ",len(nodes[curr["node_id"]].children))
+            for i in range(len(nodes[curr["node_id"]].children)):
+                # print('i******',i)
+                child_loc = [nodes[nodes[curr["node_id"]].children[i]].x,nodes[nodes[curr["node_id"]].children[i]].y]
                 child_timestep = curr["timestep"] + 1
-                print('child**********',child_loc[0],child_loc[1])
+                # print('child**********',child_loc[0],child_loc[1])
                 child = {
                     "loc": [child_loc[0],child_loc[1]],
                     "g_val": curr["g_val"] + 1,
                     "h_val": self.compute_heuristics(child_loc,goal_loc),
                     "parent": curr,
                     "timestep": child_timestep,
-                    "dir":child_loc[2]
+                    "node_id":nodes[curr["node_id"]].children[i]
                 }
-                print('hval********',self.compute_heuristics(child_loc,goal_loc))
+                # print('hval********',self.compute_heuristics(child_loc,goal_loc))
                 if (tuple(child["loc"]), child["timestep"]) in closed_list:
                     existing_node = closed_list[tuple(child["loc"]), child["timestep"]]
                     if self.compare_nodes(child, existing_node):
@@ -414,7 +461,9 @@ class MAPF:
         path = []
         curr = goal_node
         while curr is not None:
-            path.append(curr["loc"])
+            temp=list(curr["loc"])
+            temp.append(curr["node_id"])
+            path.append(temp)
             curr = curr["parent"]
         path.reverse()
         return path
