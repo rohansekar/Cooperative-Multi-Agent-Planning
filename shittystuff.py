@@ -12,6 +12,7 @@ import time as timer
 import pickle
 import copy
 import heapq
+from tqdm import tqdm
 class path:
     def __init__(self, x):
         self.path = x
@@ -37,8 +38,8 @@ class loc:
 class MAPF:
     def __init__(self):
         self.num_of_agents=3
-        self.starts=[(-33.48821258544922,-9.2613845147593956),(-24.13109588623047,-0.3281878924291778),(2.989964485168457,5.2117018699646)]
-        self.goals=[(-21,-1),(-5,-1),(-14,0)]
+        self.starts=[(-43.48821258544922,-0.2613845147593956),(3.5,7),(2.989964485168457,5.2117018699646)]
+        self.goals=[(-43,0),(3.5,7),(-16,0)]
         self.heuristics = []
         self.used = []
         # Subscribers and Publishers
@@ -93,7 +94,7 @@ class MAPF:
             126,
             127,
         ]
-        all_paths=np.load('/home/developer/mmpug_ws/src/mmpug_autonomy/mmpug_nav_layer/local_planner/scripts/mapf_rc.npy')
+        all_paths=np.load('/home/developer/mmpug_ws/src/mmpug_autonomy/mmpug_nav_layer/local_planner/scripts/mapf_rc1.npy')
         all_rel_paths= []
         for i in range(all_paths.shape[0]):
             if (all_paths[i][-1] == 2): 
@@ -126,7 +127,7 @@ class MAPF:
         self.nodes1={}
         self.nodes2={}
         self.nodes3={}
-        with open('/home/developer/mmpug_ws/src/mmpug_autonomy/mmpug_nav_layer/local_planner/scripts/obstacles2.pkl', 'rb') as file:
+        with open('/home/developer/mmpug_ws/src/mmpug_autonomy/mmpug_nav_layer/local_planner/scripts/obstacles234.pkl', 'rb') as file:
             obstacles = pickle.load(file)
         x_coords, y_coords = zip(*obstacles)
         self.conmap1={}
@@ -144,8 +145,8 @@ class MAPF:
         self.grid={}
         xc=[]
         yc=[]
-        for i in range(-600, 600):
-            for j in range(-600, 600):
+        for i in tqdm(range(-1500, 1500)):
+            for j in range(-1500, 1500):
                 self.grid[(i, j)]=loc(i, j) 
         for i in range(len(x_coords)):
             self.grid[(int(x_coords[i]*10), int(y_coords[i]*10))].occupancy=100
@@ -400,17 +401,16 @@ class MAPF:
         self.next_ids=[0]
         self.node_counter=0
         self.node_ids1.append(0)
-        for i in range(6):
+        for i in tqdm(range(19)):
             self.current_ids=self.next_ids
             self.next_ids=[]
             for j in range(len(self.current_ids)):
                 self.node_ids1.append(self.draw_children(self.current_ids[j],self.node_ids1,self.nodes1))
-
-
-
         end = time. time()
         duration = end - start
         print("Time: {} seconds". format(round(duration, 3)))
+
+        start = time. time()
         self.nodes2[0]=node()
         self.nodes2[0].x=self.odom2.pose.pose.position.x
         self.nodes2[0].y=self.odom2.pose.pose.position.y
@@ -421,12 +421,15 @@ class MAPF:
         self.next_ids=[0]
         self.node_counter=0
         self.node_ids2.append(0)
-        for i in range(6):
+        for i in tqdm(range(19)):
             self.current_ids=self.next_ids
             self.next_ids=[]
             for j in range(len(self.current_ids)):
                 self.node_ids2.append(self.draw_children(self.current_ids[j],self.node_ids2,self.nodes2))
-
+        end = time. time()
+        duration = end - start
+        print("Time: {} seconds". format(round(duration, 3)))
+        start = time. time()
         self.nodes3[0]=node()
         self.nodes3[0].x=self.odom3.pose.pose.position.x
         self.nodes3[0].y=self.odom3.pose.pose.position.y
@@ -437,11 +440,14 @@ class MAPF:
         self.next_ids=[0]
         self.node_counter=0
         self.node_ids3.append(0)
-        for i in range(6):
+        for i in tqdm(range(19)):
             self.current_ids=self.next_ids
             self.next_ids=[]
             for j in range(len(self.current_ids)):
                 self.node_ids3.append(self.draw_children(self.current_ids[j],self.node_ids3,self.nodes3))
+        end = time.time()
+        duration = end - start
+        print("Time: {} seconds". format(round(duration, 3)))
 
 
         # for i in self.nodes1.keys():

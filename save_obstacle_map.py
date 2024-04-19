@@ -15,11 +15,10 @@ from nav_msgs.msg import OccupancyGrid
 class ObstacleMap(object):
     def __init__(self):
         rospy.init_node('obstacle_map')
-        # self.obstacles = []
+        self.obstacles = []
         self.odom_sub = rospy.Subscriber("/cmu_rc1/local_mapping_lidar_node/voxel_grid/obstacle_map", OccupancyGrid, self.OccupancyGridCB)
 
     def OccupancyGridCB(self, msg):
-        self.obstacles=[]
         for i, value in enumerate(msg.data):
             if value == 100:
                 x = msg.info.origin.position.x+(i % msg.info.width)*0.15

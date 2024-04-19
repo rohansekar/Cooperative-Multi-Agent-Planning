@@ -14,6 +14,7 @@ class robot:
     def __init__(self,syst_id):
         # Params
         self.system_id = syst_id
+        self.init=False 
 
         # Subscribers and Publishers
         self.convoy_switch_sub = rospy.Subscriber("/"+self.system_id+"/odom_to_base_link", Odometry, self.odomcb)
@@ -34,13 +35,22 @@ class robot:
         self.reached=False
         self.perm_reached=False 
 
-        self.init=False
+        
 
         self.to_be_sent=PoseArray()
         self.to_be_sent.header.frame_id='global'
 
 
+    def callman(self):
+        mode=UInt8()
+        mode.data=1
+        self.mode_pub.publish(mode)
     
+    def callway(self):
+        mode=UInt8()
+        mode.data=3
+        self.mode_pub.publish(mode)
+
     def p1cb(self, msg):
         self.has_path1=True
         for i in msg.poses:
@@ -56,7 +66,7 @@ class robot:
         self.has_odom = True
 
         if self.init:
-            if (math.sqrt((self.odom.pose.pose.position.x-self.path1.poses[self.current_wp-1].position.x)**2+(self.odom.pose.pose.position.y-self.path1.poses[self.current_wp-1].position.y)**2)<0.3):
+            if (math.sqrt((self.odom.pose.pose.position.x-self.path1.poses[self.current_wp-1].position.x)**2+(self.odom.pose.pose.position.y-self.path1.poses[self.current_wp-1].position.y)**2)<0.6):
                 self.reached=True
                 if self.current_wp==len(self.path1.poses)-1:
                     self.perm_reached=True
@@ -76,7 +86,7 @@ class robot:
         self.to_be_sent.poses.append(self.path1.poses[self.current_wp])
         mode=UInt8()
         mode.data=3
-        self.mode_pub.publish(mode)
+        #self.mode_pub.publish(mode)
 
     
 
@@ -103,6 +113,7 @@ class ConvoyOrder():
         self.robot_names.append("cmu_rc1")
         self.robot_names.append("cmu_rc2")
         self.robot_names.append("cmu_rc3")
+        self.skipped_names = []
         
 
 
@@ -173,14 +184,15 @@ class ConvoyOrder():
         
             
     def check_reached(self):
-        skipped_names = []
+        self.skipped_names = []
+        
         for i in self.robot_names:
             if self.robots[i].path1.poses[self.robots[i].current_wp] == self.robots[i].path1.poses[self.robots[i].current_wp-1]:
                 print("found common", i)
                 if not self.robots[i].has_time:
                     self.robots[i].time = rospy.get_time()
                     self.robots[i].has_time = True
-                    skipped_names.append(i)
+                    self.skipped_names.append(i)
                 elif self.robots[i].has_time:
                     print("time ",rospy.get_time() - self.robots[i].time)
                     if rospy.get_time() - self.robots[i].time > 2:
@@ -188,10 +200,10 @@ class ConvoyOrder():
                         self.robots[i].time=0
                         self.robots[i].has_time=False
                     else:
-                        skipped_names.append(i)
+                        self.skipped_names.append(i)
         count=0
         for i in self.robot_names:
-            if i in skipped_names:
+            if i in self.skipped_names:
                 return False
             if self.robots[i].reached or self.robots[i].perm_reached:
                 count=count+1
@@ -200,7 +212,12 @@ class ConvoyOrder():
         return False
 
     def pub_current_wpts(self):
+        print("skipped", self.skipped_names)        
         for i in self.robot_names:
+            if i in self.skipped_names:
+                self.robots[i].callman()
+                continue
+            self.robots[i].callway()
             self.robots[i].send_wp()
             self.robots[i].init=True
             self.robots[i].reached=False
