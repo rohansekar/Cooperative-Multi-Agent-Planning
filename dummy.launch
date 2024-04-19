@@ -1,0 +1,21 @@
+<launch>
+
+    <arg name="system_id" default="$(optenv MMPUG_SYSTEM_ID cmu_rc1)" />
+    <arg name="output" default="screen" />
+    <arg name="debug"  default="true"/>
+    <arg name="sensorOffsetX" default="0.5"/>
+    <arg name="steering_aggressiveness" default="5.0"/>
+
+    <!-- System namespace -->
+    <!-- <group ns="$(arg system_id)"> -->
+
+        <node name="path" pkg="local_planner" type="shittystuff.py" output="$(arg output)">
+        
+        </node>
+        <!-- <node name="path" pkg="local_planner" type="final.py" output="$(arg output)">
+        
+        </node> -->
+
+    <!-- </group> -->
+
+</launch>

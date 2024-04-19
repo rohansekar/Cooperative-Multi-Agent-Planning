@@ -1,0 +1,33 @@
+<launch>
+
+    <arg name="system_id" default="$(optenv MMPUG_SYSTEM_ID cmu_rc1)" />
+    <arg name="output" default="screen" />
+    <arg name="debug"  default="true"/>
+    <arg name="sensorOffsetX" default="0.5"/>
+    <arg name="steering_aggressiveness" default="5.0"/>
+
+
+    <group ns="$(arg system_id)">
+    
+        <node name="local" pkg="local_planner" type="localPlanner" output="$(arg output)">
+            <param name="trajectory_library_filepath"  value="$(find local_planner)/config/paths.ply" />
+            <param name="correspondence_filepath_p"    value="$(find local_planner)/config/correspondences_p3.txt" />
+            <param name="correspondence_filepath_far"  value="$(find local_planner)/config/correspondences_farn.txt" />
+            <param name="correspondence_filepath_near" value="$(find local_planner)/config/correspondences_nearn.txt" />
+            <param name="correspondence_filepath_n"    value="$(find local_planner)/config/correspondences_n3.txt" />
+            <param name="vehicle_frame"                value="$(arg system_id)_base_link" />
+            <param name="map_frame"                    value="$(arg system_id)_odom" />
+            <param name="system_id"                    value="$(arg system_id)" />
+            <param name="rate"                         value="10.0" />
+            <param name="dist_threshold"               value="0.20" />
+            <param name="far_w"                        value="0.0" />
+            <param name="near_w"                       value="0.2" />
+            <param name="ang_threshold"                value="0.250" />
+            <param name="debug"                        value="$(arg debug)" />
+            <param name="sensorOffsetX"                value="$(arg sensorOffsetX)" />
+            <param name="steering_aggressiveness"      value="$(arg steering_aggressiveness)" />
+        
+        </node>
+    </group>
+
+</launch>
